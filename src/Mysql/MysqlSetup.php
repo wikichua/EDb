@@ -1,23 +1,28 @@
 <?php
 
-// use PDO;
-
 class MysqlSetup extends MysqlBuilder implements DBSetupInterface
 {
+	protected static $connection = null;
 	protected $user;
 	protected $password;
 	protected $host;
 	protected $database;
 	protected $options;
-	protected static $connection = null;
 	protected $table = "";
+	protected $called_class = "";
 
-	function __construct() {
-	}
 
-	public function setTable($table)
+	public function setTable($table,$called_class = '')
 	{
+		$reflect = new \ReflectionClass($this);
+		$props   = $reflect->getDefaultProperties();
+		foreach ($props as $prop_name => $prop_value) {
+		    if($prop_name != 'connection')
+		    	$this->$prop_name = $prop_value;
+		}
+
 		$this->table = $table;
+		$this->called_class = $called_class;
 	}
 
 	public function getConnection()
@@ -52,12 +57,27 @@ class MysqlSetup extends MysqlBuilder implements DBSetupInterface
 		return $this;
 	}
 
+	public function orderBy($field, $order = 'asc')
+	{
+		$this->orderBy[] = "{$field} {$order}";
+		return $this;
+	}
+
+	public function groupBy($field)
+	{
+		$this->groupBy[] = $field;
+		return $this;
+	}
+
 	public function get()
 	{
 		$sqls[] = "SELECT " . $this->select;
 		$sqls[] = "FROM " . $this->table;
 		$sqls[] = $this->joining();
 		$sqls[] = $this->generateWheres();
+		$sqls[] = $this->ordering();
+		$sqls[] = $this->grouping();
+		$sqls[] = $this->generateHavings();
 		if(($this->skip + $this->take) > 0)
 		{
 			$limit = '';
@@ -72,7 +92,7 @@ class MysqlSetup extends MysqlBuilder implements DBSetupInterface
 			$sqls[] = "LIMIT " . $limit;
 		}
 
-		return $this->query(implode(' ', $sqls));
+		return $this->query(trim(implode(' ', $sqls)));
 	}
 
 	public function insert($sets)
@@ -93,13 +113,31 @@ class MysqlSetup extends MysqlBuilder implements DBSetupInterface
 		return $this;
 	}
 
-	public function where($where, $operator = '=', $what='')
+	public function having($field, $operator = '=', $what = '')
+	{
+		if(!preg_match('/^\d*\d$/i', $what))
+				$what = '"' . $what. '"';
+			$this->having[] = $field .' '. $operator .' '. $what;
+
+		return $this;
+	}
+
+	public function orHaving($field, $operator = '=', $what = '')
+	{
+		if(!preg_match('/^\d*\d$/i', $what))
+				$what = '"' . $what. '"';
+			$this->orHaving[] = ' OR '.$field .' '. $operator .' '. $what;
+
+		return $this;
+	}
+
+	public function where($where, $operator = '=', $what = '')
 	{
 		if(!is_callable($where))
 		{
 			if(!preg_match('/^\d*\d$/i', $what))
 				$what = '"' . $what. '"';
-			$this->wheres[] = $where . $operator . $what;
+			$this->wheres[] = $where .' '. $operator .' '. $what;
 		} else {
 			$Query = new MysqlNestedQuery;
 			call_user_func($where, $Query);
@@ -115,7 +153,7 @@ class MysqlSetup extends MysqlBuilder implements DBSetupInterface
 		{
 			if(!preg_match('/^\d*\d$/i', $what))
 				$what = '"' . $what. '"';
-			$this->orWheres[] = ' OR ' . $where . $operator . $what;
+			$this->orWheres[] = ' OR ' . $where .' '. $operator .' '. $what;
 		} else {
 			$Query = new MysqlNestedQuery;
 			call_user_func($where, $Query);
