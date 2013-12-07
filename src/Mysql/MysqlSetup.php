@@ -1,4 +1,4 @@
-<?php
+<?php namespace EDb;
 
 class MysqlSetup extends MysqlBuilder implements DBSetupInterface
 {
@@ -11,8 +11,7 @@ class MysqlSetup extends MysqlBuilder implements DBSetupInterface
 	protected $table = "";
 	protected $called_class = "";
 
-
-	public function setTable($table,$called_class = '')
+	protected function __cleared()
 	{
 		$reflect = new \ReflectionClass($this);
 		$props   = $reflect->getDefaultProperties();
@@ -20,7 +19,11 @@ class MysqlSetup extends MysqlBuilder implements DBSetupInterface
 		    if($prop_name != 'connection')
 		    	$this->$prop_name = $prop_value;
 		}
+	}
 
+	public function setTable($table,$called_class = '')
+	{
+		$this->__cleared();
 		$this->table = $table;
 		$this->called_class = $called_class;
 	}
@@ -32,10 +35,11 @@ class MysqlSetup extends MysqlBuilder implements DBSetupInterface
 
 	protected function configuration()
 	{
-		$this->user = 'test';
-		$this->password = 'test';
-		$this->database = 'test';
-		$this->host = 'localhost';
+		$connection = Config::get('database.default');
+		$this->user = Config::get('database.connections.'.$connection.'.username');
+		$this->password = Config::get('database.connections.'.$connection.'.password');
+		$this->database = Config::get('database.connections.'.$connection.'.database');
+		$this->host = Config::get('database.connections.'.$connection.'.host');
 		return $this;
 	}
 
@@ -92,7 +96,9 @@ class MysqlSetup extends MysqlBuilder implements DBSetupInterface
 			$sqls[] = "LIMIT " . $limit;
 		}
 
-		return $this->query(trim(implode(' ', $sqls)));
+		$result = $this->query(trim(implode(' ', $sqls)));
+
+		return $result;
 	}
 
 	public function insert($sets)

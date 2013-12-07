@@ -1,7 +1,12 @@
-<?php
+<?php namespace EDb;
 
-class DB extends DBAdapter
+class DB
 {
-	public $table;
+	use \McCade\McCade;
 
+	public function __construct()
+	{
+		$DBFluent = new DBFluent();
+		$this->load($DBFluent);
+	}
 }
